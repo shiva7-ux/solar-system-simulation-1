@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Solar System Simulation</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: black;
+      color: white;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255 255 255 / 0.1);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      max-width: 90vw;
+      font-size: 14px;
+      z-index: 10;
+      user-select: none;
+    }
+    label {
+      display: block;
+      margin-top: 8px;
+    }
+    input[type="range"] {
+      width: 120px;
+      vertical-align: middle;
+    }
+    button {
+      margin-top: 10px;
+      padding: 5px 10px;
+      background: white;
+      color: black;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:focus {
+      outline: none;
+    }
+
+    /* Here you is a Dark mode styles (default) */
+    body.dark {
+      background: black;
+      color: white;
+    }
+    body.dark #controls {
+      background: rgba(255 255 255 / 0.1);
+      color: white;
+    }
+    /* Light mode styles */
+    body.light {
+      background: #f0f0f0;
+      color: black;
+    }
+    body.light #controls {
+      background: rgba(0 0 0 / 0.1);
+      color: black;
+    }
+    button.light-toggle {
+      margin-left: 10px;
+      background: #222;
+      color: white;
+      font-weight: normal;
+      border-radius: 3px;
+      padding: 3px 8px;
+    }
+    button.light-toggle.light {
+      background: #eee;
+      color: #222;
+    }
+    @media (max-width: 600px) {
+      #controls {
+        font-size: 12px;
+        max-width: 95vw;
+        padding: 8px;
+      }
+      input[type="range"] {
+        width: 100px;
+      }
+      button {
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body class="dark">
+  <div id="controls">
+    <button id="pauseBtn">Pause</button>
+    <button id="toggleModeBtn" class="light-toggle">Light Mode</button>
+    <div id="sliders"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script>
+    // Scene setup
+    const scene = new THREE.Scene();
+
+    // Camera setup
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(0, 30, 50);
+
+    // Renderer setup
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Lighting
+    const sunLight = new THREE.PointLight(0xffffff, 2.5, 300);
+    sunLight.position.set(0, 0, 0);
+    scene.add(sunLight);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambientLight);
+
+    // Sun at centre
+    const sunGeo = new THREE.SphereGeometry(3, 64, 64);
+    const sunMat = new THREE.MeshStandardMaterial({
+      color: 0xffff00,
+      emissive: 0xffff00,
+      emissiveIntensity: 1.5,
+      roughness: 0.4,
+      metalness: 0.1,
+    });
+    const sun = new THREE.Mesh(sunGeo, sunMat);
+    scene.add(sun);
+
+    // Add subtle glowing halo to sun using Sprite
+    const spriteMap = new THREE.TextureLoader().load(
+      'https://threejs.org/examples/textures/sprites/glow.png'
+    );
+    const spriteMaterial = new THREE.SpriteMaterial({
+      map: spriteMap,
+      color: 0xffff00,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      opacity: 0.6,
+    });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    sprite.scale.set(10, 10, 1);
+    sun.add(sprite);
+
+    // Stars background creation
+    function createStars() {
+      const starGeometry = new THREE.BufferGeometry();
+      const starCount = 10000;
+      const positions = new Float32Array(starCount * 3);
+
+      for (let i = 0; i < starCount; i++) {
+        const r = 200;
+        const theta = THREE.MathUtils.randFloatSpread(360);
+        const phi = THREE.MathUtils.randFloatSpread(360);
+
+        positions[i * 3] = r * Math.sin(theta) * Math.cos(phi);
+        positions[i * 3 + 1] = r * Math.sin(theta) * Math.sin(phi);
+        positions[i * 3 + 2] = r * Math.cos(theta);
+      }
+
+      starGeometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(positions, 3)
+      );
+
+      const starMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.5,
+        sizeAttenuation: true,
+        opacity: 0.8,
+        transparent: true,
+      });
+
+      const stars = new THREE.Points(starGeometry, starMaterial);
+      scene.add(stars);
+    }
+    createStars();
+
+    // Planet information
+    const planetsData = [
+      { name: 'Mercury', size: 0.5, distance: 6, color: 0xaaaaaa, speed: 0.04 },
+      { name: 'Venus', size: 0.7, distance: 8, color: 0xffcc00, speed: 0.032 },
+      { name: 'Earth', size: 0.8, distance: 10, color: 0x3366ff, speed: 0.027 },
+      { name: 'Mars', size: 0.6, distance: 12, color: 0xff3300, speed: 0.022 },
+      { name: 'Jupiter', size: 1.6, distance: 16, color: 0xff9966, speed: 0.018 },
+      { name: 'Saturn', size: 1.4, distance: 20, color: 0xffcc99, speed: 0.015 },
+      { name: 'Uranus', size: 1.1, distance: 24, color: 0x66ffff, speed: 0.012 },
+      { name: 'Neptune', size: 1.1, distance: 28, color: 0x3366ff, speed: 0.009 },
+    ];
+
+    // Planets container
+    const planets = [];
+
+    // UI elements container
+    const slidersDiv = document.getElementById('sliders');
+
+    // Create planets & sliders
+    planetsData.forEach((data) => {
+      const geometry = new THREE.SphereGeometry(data.size, 32, 32);
+      const material = new THREE.MeshStandardMaterial({
+        color: data.color,
+        roughness: 1,
+        metalness: 0,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      planets.push({ ...data, mesh, angle: Math.random() * Math.PI * 2 });
+
+      // Slider UI
+      const label = document.createElement('label');
+      label.textContent = `${data.name} Speed: `;
+
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = 0.001;
+      slider.max = 0.05;
+      slider.step = 0.001;
+      slider.value = data.speed;
+      slider.style.verticalAlign = 'middle';
+
+      slider.addEventListener('input', (e) => {
+        const planet = planets.find((p) => p.name === data.name);
+        planet.speed = parseFloat(e.target.value);
+      });
+
+      label.appendChild(slider);
+      slidersDiv.appendChild(label);
+    });
+
+    // Pause/resume animation
+    let paused = false;
+    const pauseBtn = document.getElementById('pauseBtn');
+    pauseBtn.onclick = () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+    };
+
+    // Dark/light toggle
+    const toggleModeBtn = document.getElementById('toggleModeBtn');
+    toggleModeBtn.onclick = () => {
+      if (document.body.classList.contains('dark')) {
+        document.body.classList.replace('dark', 'light');
+        toggleModeBtn.textContent = 'Dark Mode';
+        // Change renderer clear color
+        renderer.setClearColor(0xf0f0f0);
+      } else {
+        document.body.classList.replace('light', 'dark');
+        toggleModeBtn.textContent = 'Light Mode';
+        renderer.setClearColor(0x000000);
+      }
+    };
+
+    // Set initial renderer clear color
+    renderer.setClearColor(0x000000);
+
+    // Camera control variables
+    let targetDistance = camera.position.length();
+    let targetRotationY = 0;
+    let rotationSpeed = 0.02;
+    let zoomSpeed = 2;
+
+    // On click or tap, toggle zoom in/out between two distances
+    window.addEventListener('click', () => {
+      if (targetDistance > 30) {
+        targetDistance = 15;
+      } else {
+        targetDistance = 50;
+      }
+    });
+
+    // On right click or two-finger tap (mobile), rotate camera around Y axis
+    let rotating = false;
+    let lastX = null;
+
+    function onPointerDown(event) {
+      rotating = true;
+      lastX = event.clientX || event.touches?.[0]?.clientX;
+    }
+    function onPointerMove(event) {
+      if (!rotating) return;
+      const currentX = event.clientX || event.touches?.[0]?.clientX;
+      if (lastX !== null) {
+        const deltaX = currentX - lastX;
+        targetRotationY += deltaX * 0.005;
+      }
+      lastX = currentX;
+    }
+    function onPointerUp() {
+      rotating = false;
+      lastX = null;
+    }
+
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('touchstart', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+
+    // Animate loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (!paused) {
+        planets.forEach((p) => {
+          p.angle += p.speed;
+          p.mesh.position.x = Math.cos(p.angle) * p.distance;
+          p.mesh.position.z = Math.sin(p.angle) * p.distance;
+          p.mesh.position.y = Math.sin(p.angle * 0.5) * 0.2; // slight up/down for realism
+          // optional: planet rotation on own axis
+          p.mesh.rotation.y += 0.01;
+        });
+      }
+
+      // Smooth camera zoom & rotation around sun
+      const currentDistance = camera.position.length();
+      const distanceDiff = targetDistance - currentDistance;
+      if (Math.abs(distanceDiff) > 0.1) {
+        const direction = camera.position.clone().normalize();
+        camera.position.addScaledVector(direction, distanceDiff * 0.1);
+      }
+
+      // Smooth camera rotation around Y axis
+      const desiredRotation = targetRotationY;
+      const cameraPos = new THREE.Vector3();
+      cameraPos.copy(camera.position);
+      const radius = cameraPos.length();
+      const currentAngle = Math.atan2(cameraPos.z, cameraPos.x);
+      const newAngle = THREE.MathUtils.lerp(currentAngle, desiredRotation, 0.05);
+
+      camera.position.x = Math.cos(newAngle) * radius;
+      camera.position.z = Math.sin(newAngle) * radius;
+
+      camera.lookAt(0, 0, 0);
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Responsive canvas
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
